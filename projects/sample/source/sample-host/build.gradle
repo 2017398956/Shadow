@@ -50,38 +50,51 @@ dependencies {
     implementation project(':sample-host-lib')
 }
 
-def createCopyTask(projectName, buildType, name, apkName, inputFile, taskName) {
-    def outputFile = file("${getBuildDir()}/generated/assets/${name}/${buildType}/${apkName}")
+/**
+ * 打包前将 插件管理 apk 复制到当前目录中
+ * 当 dependProjectName 项目的 dependTaskName 任务
+ * @param dependProjectName
+ * @param buildType
+ * @param assetsRootPathName
+ * @param outFileName
+ * @param inputFile
+ * @param dependTaskName
+ * @return
+ */
+def createCopyTask(dependProjectName, buildType, assetsRootPathName, outFileName, inputFile, dependTaskName) {
+    def outputFile = file("${getBuildDir()}/generated/assets/${assetsRootPathName}/${buildType}/${outFileName}")
     outputFile.getParentFile().mkdirs()
-    return tasks.create("copy${buildType.capitalize()}${name.capitalize()}Task", Copy) {
+    logger.log(LogLevel.ERROR, "copy${buildType.capitalize()}${assetsRootPathName.capitalize()}Task dependsOn ${dependProjectName}:${dependTaskName}")
+    return tasks.create("copy${buildType.capitalize()}${assetsRootPathName.capitalize()}Task", Copy) {
         group = 'build'
-        description = "复制${name}到assets中."
+        description = "复制${assetsRootPathName}到assets中."
         from(inputFile.getParent()) {
             include(inputFile.name)
             rename { outputFile.name }
         }
         into(outputFile.getParent())
 
-    }.dependsOn("${projectName}:${taskName}")
+    }.dependsOn("${dependProjectName}:${dependTaskName}")
 }
 
 def generateAssets(generateAssetsTask, buildType) {
 
     def moduleName = 'sample-manager'
     def pluginManagerApkFile = file(
-            "${project(":sample-manager").getBuildDir()}" +
+            "${project(":${moduleName}").getBuildDir()}" +
                     "/outputs/apk/${buildType}/" +
                     "${moduleName}-${buildType}.apk"
     )
+    // 将 sample-manager 项目生成的 apk 文件重命名为 pluginmanager.apk 并复制到 本项目的 assets 的缓存目录下
     generateAssetsTask.dependsOn createCopyTask(
-            ':sample-manager',
+            ":${moduleName}",
             buildType,
             moduleName,
             'pluginmanager.apk',
             pluginManagerApkFile,
             "assemble${buildType.capitalize()}"
     )
-
+    // 将根目录下的 plugin-xxx.zip 复制到 该项目的 assets/plugin-zip 缓存目录下
     def pluginZip = file("${getRootProject().getBuildDir()}/plugin-${buildType}.zip")
     generateAssetsTask.dependsOn createCopyTask(
             ':sample-plugin-app',
@@ -97,9 +110,11 @@ def generateAssets(generateAssetsTask, buildType) {
 
 tasks.whenTaskAdded { task ->
     if (task.name == "generateDebugAssets") {
+        logger.log(LogLevel.ERROR, "task generateDebugAssets added")
         generateAssets(task, 'debug')
     }
     if (task.name == "generateReleaseAssets") {
+        logger.log(LogLevel.ERROR, "task generateReleaseAssets added")
         generateAssets(task, 'release')
     }
 }
